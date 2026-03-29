@@ -12,6 +12,8 @@ export default () => ({
     apiBase: process.env.ML_API_BASE || 'https://api.mercadolibre.com',
   },
 
+  frontendUrl: process.env.FRONTEND_URL || 'http://localhost:5173',
+
   session: {
     secret: process.env.SESSION_SECRET || 'keyboard-cat-change-this',
   },

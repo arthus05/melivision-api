@@ -1,12 +1,17 @@
-import { Controller, Get, Query, Redirect, Body, Post, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Query, Redirect, Body, Post, HttpCode, HttpStatus, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { TokenResponseDto, AuthorizationUrlDto, RefreshTokenDto } from './dto/token-response.dto';
 
 @ApiTags('Authentication')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly configService: ConfigService,
+  ) {}
 
   @Get('authorize')
   @ApiOperation({
@@ -75,9 +80,59 @@ export class AuthController {
   async callback(
     @Query('code') code: string,
     @Query('state') state?: string,
-  ): Promise<TokenResponseDto> {
-    // In production, validate the state parameter here
-    return this.authService.exchangeCodeForToken(code);
+    @Res() res?: Response,
+  ): Promise<void> {
+    const frontendUrl = this.configService.get<string>('frontendUrl') || 'http://localhost:5173';
+
+    try {
+      const tokenData = await this.authService.exchangeCodeForToken(code);
+
+      // Return HTML page that notifies the parent window and closes the popup
+      const html = `<!DOCTYPE html>
+<html>
+<head><title>Conectando...</title></head>
+<body>
+<script>
+  try {
+    window.opener.postMessage(
+      {
+        type: 'ML_AUTH_SUCCESS',
+        access_token: ${JSON.stringify(tokenData.access_token)},
+        user_id: ${JSON.stringify(String(tokenData.user_id))},
+        expires_in: ${JSON.stringify(tokenData.expires_in)},
+        refresh_token: ${JSON.stringify(tokenData.refresh_token)}
+      },
+      ${JSON.stringify(frontendUrl)}
+    );
+  } catch(e) {}
+  window.close();
+</script>
+<p>Autenticado com sucesso! Você pode fechar esta janela.</p>
+</body>
+</html>`;
+
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    } catch (err) {
+      const html = `<!DOCTYPE html>
+<html>
+<head><title>Erro</title></head>
+<body>
+<script>
+  try {
+    window.opener.postMessage(
+      { type: 'ML_AUTH_ERROR', error: 'Falha na autenticação' },
+      ${JSON.stringify(frontendUrl)}
+    );
+  } catch(e) {}
+  window.close();
+</script>
+<p>Falha na autenticação. Você pode fechar esta janela.</p>
+</body>
+</html>`;
+      res.setHeader('Content-Type', 'text/html');
+      res.send(html);
+    }
   }
 
   @Post('refresh')
