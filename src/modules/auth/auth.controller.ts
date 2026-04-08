@@ -87,51 +87,26 @@ export class AuthController {
     try {
       const tokenData = await this.authService.exchangeCodeForToken(code);
 
-      // Return HTML page that notifies the parent window and closes the popup
-      const html = `<!DOCTYPE html>
-<html>
-<head><title>Conectando...</title></head>
-<body>
-<script>
-  try {
-    window.opener.postMessage(
-      {
+      // Redirect popup back to frontend origin with token in hash fragment
+      // This avoids the window.opener=null problem caused by cross-origin redirects
+      const authData = encodeURIComponent(JSON.stringify({
         type: 'ML_AUTH_SUCCESS',
-        access_token: ${JSON.stringify(tokenData.access_token)},
-        user_id: ${JSON.stringify(String(tokenData.user_id))},
-        expires_in: ${JSON.stringify(tokenData.expires_in)},
-        refresh_token: ${JSON.stringify(tokenData.refresh_token)}
-      },
-      ${JSON.stringify(frontendUrl)}
-    );
-  } catch(e) {}
-  window.close();
-</script>
-<p>Autenticado com sucesso! Você pode fechar esta janela.</p>
-</body>
-</html>`;
+        access_token: tokenData.access_token,
+        user_id: String(tokenData.user_id),
+        expires_in: tokenData.expires_in,
+      }));
+
+      res.redirect(`${frontendUrl}/#ml_auth=${authData}`);
 
       res.setHeader('Content-Type', 'text/html');
       res.send(html);
     } catch (err) {
-      const html = `<!DOCTYPE html>
-<html>
-<head><title>Erro</title></head>
-<body>
-<script>
-  try {
-    window.opener.postMessage(
-      { type: 'ML_AUTH_ERROR', error: 'Falha na autenticação' },
-      ${JSON.stringify(frontendUrl)}
-    );
-  } catch(e) {}
-  window.close();
-</script>
-<p>Falha na autenticação. Você pode fechar esta janela.</p>
-</body>
-</html>`;
-      res.setHeader('Content-Type', 'text/html');
-      res.send(html);
+      const errorData = encodeURIComponent(JSON.stringify({
+        type: 'ML_AUTH_ERROR',
+        error: 'Falha na autenticação',
+      }));
+
+      res.redirect(`${frontendUrl}/#ml_auth=${errorData}`);
     }
   }
 
