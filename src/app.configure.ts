@@ -9,7 +9,7 @@ export function configureApp(app: INestApplication): void {
     origin: [
       'http://localhost:5173',
       'https://meli-chat-web.vercel.app',
-      'meli-agent-api-gamma.vercel.app',
+      'https://meli-agent-api-gamma.vercel.app',
     ],
     credentials: true,
   });
