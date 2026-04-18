@@ -6,7 +6,7 @@ export function configureApp(app: INestApplication): void {
 
   // Enable CORS
   app.enableCors({
-    origin: true,
+    origin: ['http://localhost:5173', 'https://meli-chat-web.vercel.app'],
     credentials: true,
   });
 
