@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Locations')
 @Controller()
@@ -13,8 +14,8 @@ export class LocationsController {
     description: 'Returns a list of all countries available in Mercado Libre',
   })
   @ApiResponse({ status: 200, description: 'List of countries' })
-  async getCountries() {
-    return this.mlService.get('/countries');
+  async getCountries(@MlToken() userToken?: string) {
+    return this.mlService.get('/countries', undefined, userToken);
   }
 
   @Get('countries/:countryId')
@@ -28,8 +29,11 @@ export class LocationsController {
     example: 'BR',
   })
   @ApiResponse({ status: 200, description: 'Country information' })
-  async getCountry(@Param('countryId') countryId: string) {
-    return this.mlService.get(`/countries/${countryId}`);
+  async getCountry(
+    @Param('countryId') countryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/countries/${countryId}`, undefined, userToken);
   }
 
   @Get('countries/:countryId/states')
@@ -43,8 +47,11 @@ export class LocationsController {
     example: 'BR',
   })
   @ApiResponse({ status: 200, description: 'List of states' })
-  async getCountryStates(@Param('countryId') countryId: string) {
-    return this.mlService.get(`/countries/${countryId}/states`);
+  async getCountryStates(
+    @Param('countryId') countryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/countries/${countryId}/states`, undefined, userToken);
   }
 
   @Get('states/:stateId')
@@ -58,8 +65,8 @@ export class LocationsController {
     example: 'BR-SP',
   })
   @ApiResponse({ status: 200, description: 'State information' })
-  async getState(@Param('stateId') stateId: string) {
-    return this.mlService.get(`/states/${stateId}`);
+  async getState(@Param('stateId') stateId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/states/${stateId}`, undefined, userToken);
   }
 
   @Get('states/:stateId/cities')
@@ -73,8 +80,11 @@ export class LocationsController {
     example: 'BR-SP',
   })
   @ApiResponse({ status: 200, description: 'List of cities' })
-  async getStateCities(@Param('stateId') stateId: string) {
-    return this.mlService.get(`/states/${stateId}/cities`);
+  async getStateCities(
+    @Param('stateId') stateId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/states/${stateId}/cities`, undefined, userToken);
   }
 
   @Get('cities/:cityId')
@@ -88,7 +98,7 @@ export class LocationsController {
     example: 'BR-SP-44',
   })
   @ApiResponse({ status: 200, description: 'City information' })
-  async getCity(@Param('cityId') cityId: string) {
-    return this.mlService.get(`/cities/${cityId}`);
+  async getCity(@Param('cityId') cityId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/cities/${cityId}`, undefined, userToken);
   }
 }

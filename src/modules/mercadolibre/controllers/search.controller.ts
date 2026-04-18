@@ -1,6 +1,7 @@
 import { Controller, Get, HttpException, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Search')
 @Controller('search')
@@ -137,6 +138,7 @@ export class SearchController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
     @Query('search_type') searchType?: string,
+    @MlToken() userToken?: string,
   ) {
     const requestedLimit = Math.min(Math.max(limit ?? 10, 1), 50);
 
@@ -144,18 +146,26 @@ export class SearchController {
     // shipping. Requires a user-level token (app-level gets 403 since April
     // 2025). Falls back to catalog search + buy-box enrichment when
     // marketplace search isn't available.
-    const marketplaceResult = await this.tryMarketplaceSearch(siteId, {
-      q, category, sellerId, officialStoreId, priceMin, priceMax,
-      shipping, condition, sort, searchType,
-      limit: requestedLimit, offset,
-    });
+    const marketplaceResult = await this.tryMarketplaceSearch(
+      siteId,
+      {
+        q, category, sellerId, officialStoreId, priceMin, priceMax,
+        shipping, condition, sort, searchType,
+        limit: requestedLimit, offset,
+      },
+      userToken,
+    );
 
     if (marketplaceResult) return marketplaceResult;
 
-    return this.catalogSearch(siteId, {
-      q, category, priceMin, priceMax, shipping, condition, sort,
-      limit: requestedLimit, offset,
-    });
+    return this.catalogSearch(
+      siteId,
+      {
+        q, category, priceMin, priceMax, shipping, condition, sort,
+        limit: requestedLimit, offset,
+      },
+      userToken,
+    );
   }
 
   private async tryMarketplaceSearch(
@@ -166,6 +176,7 @@ export class SearchController {
       shipping?: string; condition?: string; sort?: string;
       searchType?: string; limit: number; offset?: number;
     },
+    userToken?: string,
   ) {
     const params: Record<string, any> = { limit: opts.limit };
     if (opts.q) params.q = opts.q;
@@ -184,6 +195,7 @@ export class SearchController {
       const data = await this.mlService.get<any>(
         `/sites/${siteId}/search`,
         params,
+        userToken,
       );
       return {
         site_id: siteId,
@@ -236,6 +248,7 @@ export class SearchController {
       shipping?: string; condition?: string; sort?: string;
       limit: number; offset?: number;
     },
+    userToken?: string,
   ) {
     const fetchLimit = Math.min(opts.limit * 2, 40);
     const params: any = {
@@ -247,7 +260,7 @@ export class SearchController {
     if (opts.category) params.domain_id = opts.category;
     if (opts.offset !== undefined) params.offset = opts.offset;
 
-    const catalog = await this.mlService.get<any>('/products/search', params);
+    const catalog = await this.mlService.get<any>('/products/search', params, userToken);
 
     const enriched = await Promise.all(
       (catalog.results || []).map(async (product: any) => {
@@ -256,6 +269,7 @@ export class SearchController {
           const itemsRes = await this.mlService.get<any>(
             `/products/${product.id}/items`,
             { limit: 1 },
+            userToken,
           );
           item = itemsRes?.results?.[0] || null;
         } catch {
@@ -369,11 +383,12 @@ export class SearchController {
     @Param('siteId') siteId: string,
     @Query('q') q: string,
     @Query('limit') limit?: number,
+    @MlToken() userToken?: string,
   ) {
     const params: any = { q };
     if (limit) params.limit = limit;
 
-    return this.mlService.get(`/sites/${siteId}/autosuggest`, params);
+    return this.mlService.get(`/sites/${siteId}/autosuggest`, params, userToken);
   }
 
   @Get('products')
@@ -436,6 +451,7 @@ export class SearchController {
     @Query('status') status?: string,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @MlToken() userToken?: string,
   ) {
     const params: any = { site_id: siteId };
 
@@ -446,7 +462,7 @@ export class SearchController {
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
 
-    return this.mlService.get('/products/search', params);
+    return this.mlService.get('/products/search', params, userToken);
   }
 
   @Get('products/:productId')
@@ -463,7 +479,10 @@ export class SearchController {
     status: 200,
     description: 'Catalog product details',
   })
-  async getProduct(@Param('productId') productId: string) {
-    return this.mlService.get(`/products/${productId}`);
+  async getProduct(
+    @Param('productId') productId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/products/${productId}`, undefined, userToken);
   }
 }

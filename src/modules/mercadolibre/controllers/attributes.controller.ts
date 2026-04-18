@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Attributes')
 @Controller('attributes')
@@ -16,8 +17,8 @@ export class AttributesController {
     status: 200,
     description: 'List of attributes',
   })
-  async getAttributes() {
-    return this.mlService.get('/attributes');
+  async getAttributes(@MlToken() userToken?: string) {
+    return this.mlService.get('/attributes', undefined, userToken);
   }
 
   @Get(':attributeId')
@@ -43,7 +44,10 @@ export class AttributesController {
       },
     },
   })
-  async getAttribute(@Param('attributeId') attributeId: string) {
-    return this.mlService.get(`/attributes/${attributeId}`);
+  async getAttribute(
+    @Param('attributeId') attributeId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/attributes/${attributeId}`, undefined, userToken);
   }
 }

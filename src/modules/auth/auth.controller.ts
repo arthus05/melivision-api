@@ -1,9 +1,12 @@
-import { Controller, Get, Query, Redirect, Body, Post, HttpCode, HttpStatus, Res } from '@nestjs/common';
+import { Controller, Get, Query, Body, Post, HttpCode, HttpStatus, Req, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
 import { TokenResponseDto, AuthorizationUrlDto, RefreshTokenDto } from './dto/token-response.dto';
+
+const STATE_COOKIE = 'ml_oauth_state';
+const STATE_COOKIE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -24,9 +27,11 @@ export class AuthController {
     description: 'Authorization URL generated successfully',
     type: AuthorizationUrlDto,
   })
-  getAuthorizationUrl(): AuthorizationUrlDto {
-    const state = this.authService['generateSecureState']();
+  getAuthorizationUrl(@Res({ passthrough: true }) res: Response): AuthorizationUrlDto {
+    const state = this.authService.generateSecureState();
     const authorization_url = this.authService.getAuthorizationUrl(state);
+
+    this.setStateCookie(res, state);
 
     return {
       authorization_url,
@@ -44,10 +49,11 @@ export class AuthController {
     status: 302,
     description: 'Redirects to Mercado Libre authorization page',
   })
-  @Redirect()
-  login() {
-    const url = this.authService.getAuthorizationUrl();
-    return { url };
+  login(@Res() res: Response): void {
+    const state = this.authService.generateSecureState();
+    const url = this.authService.getAuthorizationUrl(state);
+    this.setStateCookie(res, state);
+    res.redirect(url);
   }
 
   @Get('callback')
@@ -64,25 +70,29 @@ export class AuthController {
   })
   @ApiQuery({
     name: 'state',
-    description: 'State parameter for security validation (optional)',
-    required: false,
+    description: 'State parameter for CSRF validation (must match cookie)',
+    required: true,
     example: 'abc123xyz456',
   })
   @ApiResponse({
-    status: 200,
-    description: 'Successfully exchanged code for access token',
-    type: TokenResponseDto,
-  })
-  @ApiResponse({
-    status: 401,
-    description: 'Failed to exchange authorization code',
+    status: 302,
+    description: 'Redirects back to frontend with auth result in hash fragment',
   })
   async callback(
     @Query('code') code: string,
-    @Query('state') state?: string,
-    @Res() res?: Response,
+    @Query('state') state: string,
+    @Req() req: Request,
+    @Res() res: Response,
   ): Promise<void> {
     const frontendUrl = this.configService.get<string>('frontendUrl') || 'http://localhost:5173';
+    const cookies = (req as Request & { cookies?: Record<string, string> }).cookies || {};
+    const cookieState = cookies[STATE_COOKIE];
+
+    this.clearStateCookie(res);
+
+    if (!cookieState || !state || cookieState !== state) {
+      return this.redirectError(res, frontendUrl, 'Parâmetro de estado inválido');
+    }
 
     try {
       const tokenData = await this.authService.exchangeCodeForToken(code);
@@ -97,13 +107,8 @@ export class AuthController {
       }));
 
       res.redirect(`${frontendUrl}/#ml_auth=${authData}`);
-    } catch (err) {
-      const errorData = encodeURIComponent(JSON.stringify({
-        type: 'ML_AUTH_ERROR',
-        error: 'Falha na autenticação',
-      }));
-
-      res.redirect(`${frontendUrl}/#ml_auth=${errorData}`);
+    } catch {
+      this.redirectError(res, frontendUrl, 'Falha na autenticação');
     }
   }
 
@@ -128,48 +133,34 @@ export class AuthController {
     return this.authService.refreshAccessToken(body.refresh_token);
   }
 
-  @Get('status')
-  @ApiOperation({
-    summary: 'Check authentication status',
-    description: 'Returns the current authentication status of the application',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Authentication status',
-    schema: {
-      type: 'object',
-      properties: {
-        authenticated: { type: 'boolean', example: true },
-        message: { type: 'string', example: 'Authenticated' },
-      },
-    },
-  })
-  getStatus() {
-    const authenticated = this.authService.isAuthenticated();
-    return {
-      authenticated,
-      message: authenticated ? 'Authenticated' : 'Not authenticated',
-    };
+  private setStateCookie(res: Response, state: string): void {
+    res.cookie(STATE_COOKIE, state, {
+      httpOnly: true,
+      secure: this.isProduction(),
+      sameSite: 'lax',
+      maxAge: STATE_COOKIE_MAX_AGE_MS,
+      path: '/',
+    });
   }
 
-  @Post('logout')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({
-    summary: 'Clear tokens (logout)',
-    description: 'Clears stored access and refresh tokens from the application',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Successfully logged out',
-    schema: {
-      type: 'object',
-      properties: {
-        message: { type: 'string', example: 'Successfully logged out' },
-      },
-    },
-  })
-  logout() {
-    this.authService.clearTokens();
-    return { message: 'Successfully logged out' };
+  private clearStateCookie(res: Response): void {
+    res.clearCookie(STATE_COOKIE, {
+      httpOnly: true,
+      secure: this.isProduction(),
+      sameSite: 'lax',
+      path: '/',
+    });
+  }
+
+  private redirectError(res: Response, frontendUrl: string, message: string): void {
+    const errorData = encodeURIComponent(JSON.stringify({
+      type: 'ML_AUTH_ERROR',
+      error: message,
+    }));
+    res.redirect(`${frontendUrl}/#ml_auth=${errorData}`);
+  }
+
+  private isProduction(): boolean {
+    return this.configService.get<string>('NODE_ENV') === 'production';
   }
 }

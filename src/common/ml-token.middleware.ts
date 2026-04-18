@@ -1,20 +1,16 @@
 import { Injectable, NestMiddleware } from '@nestjs/common';
 import { Request, Response, NextFunction } from 'express';
-import { AuthService } from '../modules/auth/auth.service';
 
 /**
- * Injects X-ML-Token header into AuthService so MercadolibreService
- * can use a per-request token forwarded from meli-agent-api.
- * Falls back to the in-memory token if header is absent.
+ * Attaches the forwarded X-ML-Token header to the request object so downstream
+ * handlers can read it via the @MlToken() param decorator. No shared state.
  */
 @Injectable()
 export class MlTokenMiddleware implements NestMiddleware {
-  constructor(private readonly authService: AuthService) {}
-
-  use(req: Request, _res: Response, next: NextFunction) {
-    const token = req.headers['x-ml-token'] as string | undefined;
-    if (token) {
-      this.authService.setAccessToken(token, 21600);
+  use(req: Request & { mlToken?: string }, _res: Response, next: NextFunction) {
+    const token = req.headers['x-ml-token'];
+    if (typeof token === 'string' && token.length > 0) {
+      req.mlToken = token;
     }
     next();
   }

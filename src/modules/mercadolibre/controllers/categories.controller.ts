@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Categories')
 @Controller('categories')
@@ -29,8 +30,11 @@ export class CategoriesController {
       },
     },
   })
-  async getCategory(@Param('categoryId') categoryId: string) {
-    return this.mlService.get(`/categories/${categoryId}`);
+  async getCategory(
+    @Param('categoryId') categoryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/categories/${categoryId}`, undefined, userToken);
   }
 
   @Get(':categoryId/children')
@@ -44,8 +48,11 @@ export class CategoriesController {
     example: 'MLB1051',
   })
   @ApiResponse({ status: 200, description: 'List of subcategories' })
-  async getCategoryChildren(@Param('categoryId') categoryId: string) {
-    return this.mlService.get(`/categories/${categoryId}/children`);
+  async getCategoryChildren(
+    @Param('categoryId') categoryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/categories/${categoryId}/children`, undefined, userToken);
   }
 
   @Get(':categoryId/attributes')
@@ -75,8 +82,11 @@ export class CategoriesController {
       },
     },
   })
-  async getCategoryAttributes(@Param('categoryId') categoryId: string) {
-    return this.mlService.get(`/categories/${categoryId}/attributes`);
+  async getCategoryAttributes(
+    @Param('categoryId') categoryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/categories/${categoryId}/attributes`, undefined, userToken);
   }
 
   @Get(':categoryId/brands')
@@ -90,7 +100,10 @@ export class CategoriesController {
     example: 'MLB1051',
   })
   @ApiResponse({ status: 200, description: 'List of brands' })
-  async getCategoryBrands(@Param('categoryId') categoryId: string) {
-    return this.mlService.get(`/categories/${categoryId}/brands`);
+  async getCategoryBrands(
+    @Param('categoryId') categoryId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/categories/${categoryId}/brands`, undefined, userToken);
   }
 }

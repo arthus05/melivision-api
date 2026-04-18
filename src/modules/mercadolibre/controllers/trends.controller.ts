@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Trends')
 @Controller('trends')
@@ -31,8 +32,8 @@ export class TrendsController {
       },
     },
   })
-  async getTrends(@Param('siteId') siteId: string) {
-    return this.mlService.get(`/trends/${siteId}`);
+  async getTrends(@Param('siteId') siteId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/trends/${siteId}`, undefined, userToken);
   }
 
   @Get(':siteId/categories/:categoryId')
@@ -57,7 +58,8 @@ export class TrendsController {
   async getCategoryTrends(
     @Param('siteId') siteId: string,
     @Param('categoryId') categoryId: string,
+    @MlToken() userToken?: string,
   ) {
-    return this.mlService.get(`/trends/${siteId}/${categoryId}`);
+    return this.mlService.get(`/trends/${siteId}/${categoryId}`, undefined, userToken);
   }
 }

@@ -1,6 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Messages')
 @ApiBearerAuth('access-token')
@@ -36,13 +37,14 @@ export class MessagesController {
   async getReceivedMessages(
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
+    @MlToken() userToken?: string,
   ) {
     const params: any = {};
-    
+
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
 
-    return this.mlService.get('/messages/packs', params);
+    return this.mlService.get('/messages/packs', params, userToken);
   }
 
   @Get('notifications')
@@ -58,8 +60,8 @@ export class MessagesController {
     status: 401,
     description: 'Unauthorized - authentication required',
   })
-  async getNotifications() {
-    return this.mlService.get('/myfeeds');
+  async getNotifications(@MlToken() userToken?: string) {
+    return this.mlService.get('/myfeeds', undefined, userToken);
   }
 
   @Get('bookmarks')
@@ -75,7 +77,7 @@ export class MessagesController {
     status: 401,
     description: 'Unauthorized - authentication required',
   })
-  async getBookmarks() {
-    return this.mlService.get('/bookmarks');
+  async getBookmarks(@MlToken() userToken?: string) {
+    return this.mlService.get('/bookmarks', undefined, userToken);
   }
 }

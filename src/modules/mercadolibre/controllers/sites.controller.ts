@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Sites')
 @Controller('sites')
@@ -26,8 +27,8 @@ export class SitesController {
       },
     },
   })
-  async getSites() {
-    return this.mlService.get('/sites');
+  async getSites(@MlToken() userToken?: string) {
+    return this.mlService.get('/sites', undefined, userToken);
   }
 
   @Get(':siteId')
@@ -53,8 +54,8 @@ export class SitesController {
       },
     },
   })
-  async getSite(@Param('siteId') siteId: string) {
-    return this.mlService.get(`/sites/${siteId}`);
+  async getSite(@Param('siteId') siteId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/sites/${siteId}`, undefined, userToken);
   }
 
   @Get(':siteId/categories')
@@ -71,7 +72,10 @@ export class SitesController {
     status: 200,
     description: 'List of categories',
   })
-  async getSiteCategories(@Param('siteId') siteId: string) {
-    return this.mlService.get(`/sites/${siteId}/categories`);
+  async getSiteCategories(
+    @Param('siteId') siteId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/sites/${siteId}/categories`, undefined, userToken);
   }
 }

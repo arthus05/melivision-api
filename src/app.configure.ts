@@ -1,8 +1,13 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const cookieParser = require('cookie-parser');
+
 export function configureApp(app: INestApplication): void {
   // Security headers are applied in main.ts / api/index.ts (helmet)
+
+  app.use(cookieParser());
 
   // Enable CORS
   app.enableCors({

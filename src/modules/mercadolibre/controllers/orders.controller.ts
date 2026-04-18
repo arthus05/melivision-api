@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Orders')
 @ApiBearerAuth('access-token')
@@ -50,16 +51,17 @@ export class OrdersController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
     @Query('sort') sort?: string,
+    @MlToken() userToken?: string,
   ) {
     // ML requires seller={user_id} — resolve from the forwarded user token.
-    const me = await this.mlService.get<any>('/users/me');
+    const me = await this.mlService.get<any>('/users/me', undefined, userToken);
     const params: any = { seller: me.id };
 
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
     if (sort) params.sort = sort;
 
-    return this.mlService.get('/orders/search', params);
+    return this.mlService.get('/orders/search', params, userToken);
   }
 
   @Get('received/:orderId')
@@ -92,8 +94,8 @@ export class OrdersController {
     status: 401,
     description: 'Unauthorized - authentication required',
   })
-  async getOrder(@Param('orderId') orderId: string) {
-    return this.mlService.get(`/orders/${orderId}`);
+  async getOrder(@Param('orderId') orderId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/orders/${orderId}`, undefined, userToken);
   }
 
   @Get(':orderId/shipments')
@@ -110,7 +112,10 @@ export class OrdersController {
     status: 200,
     description: 'Shipment information',
   })
-  async getOrderShipments(@Param('orderId') orderId: string) {
-    return this.mlService.get(`/shipments/search?order_id=${orderId}`);
+  async getOrderShipments(
+    @Param('orderId') orderId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/shipments/search?order_id=${orderId}`, undefined, userToken);
   }
 }

@@ -1,6 +1,7 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Currencies')
 @Controller('currencies')
@@ -27,8 +28,8 @@ export class CurrenciesController {
       },
     },
   })
-  async getCurrencies() {
-    return this.mlService.get('/currencies');
+  async getCurrencies(@MlToken() userToken?: string) {
+    return this.mlService.get('/currencies', undefined, userToken);
   }
 
   @Get(':currencyId')
@@ -54,7 +55,10 @@ export class CurrenciesController {
       },
     },
   })
-  async getCurrency(@Param('currencyId') currencyId: string) {
-    return this.mlService.get(`/currencies/${currencyId}`);
+  async getCurrency(
+    @Param('currencyId') currencyId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/currencies/${currencyId}`, undefined, userToken);
   }
 }

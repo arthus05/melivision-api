@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
 import { AxiosRequestConfig } from 'axios';
-import { AuthService } from '../auth/auth.service';
+import { AppTokenService } from '../auth/app-token.service';
 
 // Strip undefined/null/''/NaN so Nest's ValidationPipe coercion doesn't leak
 // sentinel values into ML query strings. With `enableImplicitConversion: true`,
@@ -30,22 +30,21 @@ export class MercadolibreService {
   constructor(
     private readonly configService: ConfigService,
     private readonly httpService: HttpService,
-    private readonly authService: AuthService,
+    private readonly appTokenService: AppTokenService,
   ) {
     this.apiBase = this.configService.get<string>('mercadolibre.apiBase');
   }
 
-  /**
-   * Make authenticated request to Mercado Libre API
-   * Automatically adds access token to requests
-   */
-  async request<T = any>(endpoint: string, options: AxiosRequestConfig = {}): Promise<T> {
+  async request<T = any>(
+    endpoint: string,
+    options: AxiosRequestConfig = {},
+    userToken?: string,
+  ): Promise<T> {
     const url = `${this.apiBase}${endpoint}`;
     try {
-      // ML now requires a Bearer header on virtually every endpoint (April 2025
-      // policy). Use the per-request user token if forwarded; otherwise fall
-      // back to a cached client_credentials app token.
-      const accessToken = await this.authService.getBearerToken();
+      // ML requires a Bearer on virtually every endpoint (April 2025 policy).
+      // Prefer the per-request user token; otherwise fall back to the app token.
+      const accessToken = userToken ?? (await this.appTokenService.getToken());
 
       const config: AxiosRequestConfig = {
         ...options,
@@ -68,59 +67,60 @@ export class MercadolibreService {
     }
   }
 
-  /**
-   * Make GET request
-   */
-  async get<T = any>(endpoint: string, params?: Record<string, any>): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'GET',
-      params: cleanParams(params),
-    });
+  async get<T = any>(
+    endpoint: string,
+    params?: Record<string, any>,
+    userToken?: string,
+  ): Promise<T> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'GET',
+        params: cleanParams(params),
+      },
+      userToken,
+    );
   }
 
-  /**
-   * Make POST request
-   */
-  async post<T = any>(endpoint: string, data?: any): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'POST',
-      data,
-    });
+  async post<T = any>(endpoint: string, data?: any, userToken?: string): Promise<T> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'POST',
+        data,
+      },
+      userToken,
+    );
   }
 
-  /**
-   * Make PUT request
-   */
-  async put<T = any>(endpoint: string, data?: any): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'PUT',
-      data,
-    });
+  async put<T = any>(endpoint: string, data?: any, userToken?: string): Promise<T> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'PUT',
+        data,
+      },
+      userToken,
+    );
   }
 
-  /**
-   * Make DELETE request
-   */
-  async delete<T = any>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: 'DELETE',
-    });
+  async delete<T = any>(endpoint: string, userToken?: string): Promise<T> {
+    return this.request<T>(
+      endpoint,
+      {
+        method: 'DELETE',
+      },
+      userToken,
+    );
   }
 
-  /**
-   * Handle API errors with proper logging and error transformation
-   */
   private handleError(error: any, endpoint: string): never {
     const statusCode = error.response?.status || HttpStatus.INTERNAL_SERVER_ERROR;
     const errorMessage = error.response?.data?.message || error.message;
     const errorDetails = error.response?.data;
 
-    this.logger.error(
-      `API Error on ${endpoint}: ${errorMessage}`,
-      error.response?.data || error.message,
-    );
+    this.logger.error(`API Error on ${endpoint}: ${statusCode} ${errorMessage}`);
 
-    // Handle specific ML API errors
     if (statusCode === 401) {
       throw new HttpException(
         {
@@ -157,7 +157,6 @@ export class MercadolibreService {
       );
     }
 
-    // Generic error
     throw new HttpException(
       {
         statusCode,
@@ -169,9 +168,6 @@ export class MercadolibreService {
     );
   }
 
-  /**
-   * Build query string from params
-   */
   buildQueryString(params: Record<string, any>): string {
     const filteredParams = Object.entries(params)
       .filter(([_, value]) => value !== undefined && value !== null && value !== '')

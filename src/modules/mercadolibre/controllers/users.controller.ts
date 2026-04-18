@@ -1,6 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Users')
 @Controller('users')
@@ -31,8 +32,8 @@ export class UsersController {
       },
     },
   })
-  async getUser(@Param('userId') userId: string) {
-    return this.mlService.get(`/users/${userId}`);
+  async getUser(@Param('userId') userId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/users/${userId}`, undefined, userToken);
   }
 
   @Get(':userId/reputation')
@@ -58,8 +59,11 @@ export class UsersController {
       },
     },
   })
-  async getUserReputation(@Param('userId') userId: string) {
-    return this.mlService.get(`/users/${userId}/reputation`);
+  async getUserReputation(
+    @Param('userId') userId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/users/${userId}/reputation`, undefined, userToken);
   }
 
   @Get(':userId/items/search')
@@ -132,9 +136,10 @@ export class UsersController {
     @Query('search_type') searchType?: string,
     @Query('sku') sku?: string,
     @Query('seller_sku') sellerSku?: string,
+    @MlToken() userToken?: string,
   ) {
     const params: any = {};
-    
+
     if (status) params.status = status;
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
@@ -143,7 +148,7 @@ export class UsersController {
     if (sku) params.sku = sku;
     if (sellerSku) params.seller_sku = sellerSku;
 
-    return this.mlService.get(`/users/${userId}/items/search`, params);
+    return this.mlService.get(`/users/${userId}/items/search`, params, userToken);
   }
 
   @Get(':userId/feedback')
@@ -160,8 +165,11 @@ export class UsersController {
     status: 200,
     description: 'User feedback',
   })
-  async getUserFeedback(@Param('userId') userId: string) {
-    return this.mlService.get(`/users/${userId}/brands`);
+  async getUserFeedback(
+    @Param('userId') userId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/users/${userId}/brands`, undefined, userToken);
   }
 
   @Get(':userId/listings')
@@ -183,8 +191,11 @@ export class UsersController {
     status: 401,
     description: 'Unauthorized - authentication required',
   })
-  async getUserListings(@Param('userId') userId: string) {
-    return this.mlService.get(`/users/${userId}/listings`);
+  async getUserListings(
+    @Param('userId') userId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/users/${userId}/listings`, undefined, userToken);
   }
 
   @Get('me')
@@ -201,7 +212,7 @@ export class UsersController {
     status: 401,
     description: 'Unauthorized - authentication required',
   })
-  async getCurrentUser() {
-    return this.mlService.get('/users/me');
+  async getCurrentUser(@MlToken() userToken?: string) {
+    return this.mlService.get('/users/me', undefined, userToken);
   }
 }

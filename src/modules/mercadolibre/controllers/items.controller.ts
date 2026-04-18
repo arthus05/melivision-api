@@ -1,6 +1,7 @@
 import { Controller, Get, HttpException, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
+import { MlToken } from '../../../common/ml-token.decorator';
 
 @ApiTags('Items')
 @Controller('items')
@@ -34,9 +35,9 @@ export class ItemsController {
       },
     },
   })
-  async getItem(@Param('itemId') itemId: string) {
+  async getItem(@Param('itemId') itemId: string, @MlToken() userToken?: string) {
     try {
-      return await this.mlService.get(`/items/${itemId}`);
+      return await this.mlService.get(`/items/${itemId}`, undefined, userToken);
     } catch (error) {
       // ML restricted /items/{id} in April 2025 — app-level tokens now get 403.
       // Compose a best-effort public view from endpoints that still work with
@@ -46,13 +47,13 @@ export class ItemsController {
 
       const [description, reviews, questions] = await Promise.all([
         this.mlService
-          .get<any>(`/items/${itemId}/description`)
+          .get<any>(`/items/${itemId}/description`, undefined, userToken)
           .catch(() => null),
         this.mlService
-          .get<any>(`/reviews/item/${itemId}`)
+          .get<any>(`/reviews/item/${itemId}`, undefined, userToken)
           .catch(() => null),
         this.mlService
-          .get<any>(`/questions/search`, { item_id: itemId })
+          .get<any>(`/questions/search`, { item_id: itemId }, userToken)
           .catch(() => null),
       ]);
 
@@ -112,8 +113,11 @@ export class ItemsController {
       },
     },
   })
-  async getItemDescription(@Param('itemId') itemId: string) {
-    return this.mlService.get(`/items/${itemId}/description`);
+  async getItemDescription(
+    @Param('itemId') itemId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/items/${itemId}/description`, undefined, userToken);
   }
 
   @Get(':itemId/questions')
@@ -137,8 +141,11 @@ export class ItemsController {
       },
     },
   })
-  async getItemQuestions(@Param('itemId') itemId: string) {
-    return this.mlService.get(`/questions/search?item_id=${itemId}`);
+  async getItemQuestions(
+    @Param('itemId') itemId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/questions/search?item_id=${itemId}`, undefined, userToken);
   }
 
   @Get(':itemId/reviews')
@@ -155,8 +162,11 @@ export class ItemsController {
     status: 200,
     description: 'Item reviews',
   })
-  async getItemReviews(@Param('itemId') itemId: string) {
-    return this.mlService.get(`/reviews/item/${itemId}`);
+  async getItemReviews(
+    @Param('itemId') itemId: string,
+    @MlToken() userToken?: string,
+  ) {
+    return this.mlService.get(`/reviews/item/${itemId}`, undefined, userToken);
   }
 
   @Get(':itemId/shipping_options')
@@ -196,13 +206,18 @@ export class ItemsController {
     @Param('itemId') itemId: string,
     @Query('zip_code') zipCode?: string,
     @Query('quantity') quantity?: number,
+    @MlToken() userToken?: string,
   ) {
     const params: any = {};
     if (zipCode) params.zip_code = zipCode;
     if (quantity) params.quantity = quantity;
 
     const queryString = this.mlService.buildQueryString(params);
-    return this.mlService.get(`/items/${itemId}/shipping_options${queryString ? '?' + queryString : ''}`);
+    return this.mlService.get(
+      `/items/${itemId}/shipping_options${queryString ? '?' + queryString : ''}`,
+      undefined,
+      userToken,
+    );
   }
 
   @Get(':itemId/visits')
@@ -219,7 +234,7 @@ export class ItemsController {
     status: 200,
     description: 'Visit statistics',
   })
-  async getItemVisits(@Param('itemId') itemId: string) {
-    return this.mlService.get(`/items/${itemId}/visits`);
+  async getItemVisits(@Param('itemId') itemId: string, @MlToken() userToken?: string) {
+    return this.mlService.get(`/items/${itemId}/visits`, undefined, userToken);
   }
 }
