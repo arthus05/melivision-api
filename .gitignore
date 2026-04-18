@@ -49,3 +49,4 @@ key.pem
 *.swo
 *~
 .tmp
+.vercel
