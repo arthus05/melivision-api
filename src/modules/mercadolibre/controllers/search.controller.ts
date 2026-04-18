@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, HttpException, Param, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { MercadolibreService } from '../mercadolibre.service';
 
@@ -138,23 +138,118 @@ export class SearchController {
     @Query('offset') offset?: number,
     @Query('search_type') searchType?: string,
   ) {
-    // ML restricted /sites/{site}/search in April 2025. Use /products/search
-    // (catalog) and enrich each result with the buy-box-winning marketplace
-    // item to recover price/seller/condition. Output shape matches the legacy
-    // /sites/{site}/search response so downstream consumers don't change.
-    const requestedLimit = Math.min(Math.max(limit ?? 10, 1), 20);
+    const requestedLimit = Math.min(Math.max(limit ?? 10, 1), 50);
+
+    // Try the marketplace search first — returns items with prices, sellers,
+    // shipping. Requires a user-level token (app-level gets 403 since April
+    // 2025). Falls back to catalog search + buy-box enrichment when
+    // marketplace search isn't available.
+    const marketplaceResult = await this.tryMarketplaceSearch(siteId, {
+      q, category, sellerId, officialStoreId, priceMin, priceMax,
+      shipping, condition, sort, searchType,
+      limit: requestedLimit, offset,
+    });
+
+    if (marketplaceResult) return marketplaceResult;
+
+    return this.catalogSearch(siteId, {
+      q, category, priceMin, priceMax, shipping, condition, sort,
+      limit: requestedLimit, offset,
+    });
+  }
+
+  private async tryMarketplaceSearch(
+    siteId: string,
+    opts: {
+      q?: string; category?: string; sellerId?: string;
+      officialStoreId?: string; priceMin?: number; priceMax?: number;
+      shipping?: string; condition?: string; sort?: string;
+      searchType?: string; limit: number; offset?: number;
+    },
+  ) {
+    const params: Record<string, any> = { limit: opts.limit };
+    if (opts.q) params.q = opts.q;
+    if (opts.category) params.category = opts.category;
+    if (opts.sellerId) params.seller_id = opts.sellerId;
+    if (opts.officialStoreId) params.official_store_id = opts.officialStoreId;
+    if (opts.priceMin) params.price_min = opts.priceMin;
+    if (opts.priceMax) params.price_max = opts.priceMax;
+    if (opts.shipping) params.shipping = opts.shipping;
+    if (opts.condition) params.condition = opts.condition;
+    if (opts.sort) params.sort = opts.sort;
+    if (opts.searchType) params.search_type = opts.searchType;
+    if (opts.offset !== undefined) params.offset = opts.offset;
+
+    try {
+      const data = await this.mlService.get<any>(
+        `/sites/${siteId}/search`,
+        params,
+      );
+      return {
+        site_id: siteId,
+        query: opts.q,
+        paging: data.paging,
+        results: (data.results || []).map((item: any) => ({
+          id: item.id,
+          title: item.title,
+          price: item.price,
+          original_price: item.original_price,
+          currency_id: item.currency_id,
+          condition: item.condition,
+          sold_quantity: item.sold_quantity,
+          available_quantity: item.available_quantity,
+          listing_type_id: item.listing_type_id,
+          domain_id: item.domain_id,
+          category_id: item.category_id,
+          thumbnail: item.thumbnail,
+          permalink: item.permalink,
+          shipping: item.shipping
+            ? {
+                free_shipping: item.shipping.free_shipping,
+                logistic_type: item.shipping.logistic_type,
+              }
+            : null,
+          seller: item.seller
+            ? { id: item.seller.id, nickname: item.seller.nickname }
+            : null,
+          attributes: (item.attributes || [])
+            .filter((a: any) => a.value_name)
+            .map((a: any) => ({
+              id: a.id,
+              name: a.name,
+              value_name: a.value_name,
+            })),
+        })),
+      };
+    } catch (error) {
+      const status =
+        error instanceof HttpException ? error.getStatus() : 0;
+      if (status === 403) return null; // fall back to catalog search
+      throw error;
+    }
+  }
+
+  private async catalogSearch(
+    siteId: string,
+    opts: {
+      q?: string; category?: string; priceMin?: number; priceMax?: number;
+      shipping?: string; condition?: string; sort?: string;
+      limit: number; offset?: number;
+    },
+  ) {
+    const fetchLimit = Math.min(opts.limit * 2, 40);
     const params: any = {
       site_id: siteId,
       status: 'active',
-      limit: requestedLimit,
+      limit: fetchLimit,
     };
-    if (q) params.q = q;
-    if (category) params.domain_id = category;
-    if (offset !== undefined) params.offset = offset;
+    if (opts.q) params.q = opts.q;
+    if (opts.category) params.domain_id = opts.category;
+    if (opts.offset !== undefined) params.offset = opts.offset;
 
     const catalog = await this.mlService.get<any>('/products/search', params);
 
-    const results = await Promise.all(
+    const enriched = await Promise.all(
       (catalog.results || []).map(async (product: any) => {
         let item: any = null;
         try {
@@ -164,7 +259,7 @@ export class SearchController {
           );
           item = itemsRes?.results?.[0] || null;
         } catch {
-          // No buy-box winner for this catalog product — return catalog-only row.
+          // No buy-box winner.
         }
 
         const thumbnail =
@@ -172,61 +267,69 @@ export class SearchController {
           product.pictures?.[0]?.secure_url ||
           undefined;
 
+        const attrs = (product.attributes || [])
+          .filter((a: any) => a.value_name)
+          .map((a: any) => ({
+            id: a.id,
+            name: a.name,
+            value_name: a.value_name,
+          }));
+
         return {
           id: item?.item_id || product.id,
           catalog_product_id: product.id,
           title: product.name,
-          price: item?.price,
-          original_price: item?.original_price,
-          currency_id: item?.currency_id,
-          condition: item?.condition,
-          available_quantity: item?.available_quantity,
-          listing_type_id: item?.listing_type_id,
+          price: item?.price ?? null,
+          original_price: item?.original_price ?? null,
+          currency_id: item?.currency_id ?? null,
+          condition: item?.condition ?? null,
+          available_quantity: item?.available_quantity ?? null,
+          listing_type_id: item?.listing_type_id ?? null,
           domain_id: product.domain_id,
           thumbnail,
-          permalink: item?.permalink || product.permalink,
+          permalink: item?.permalink || product.permalink || null,
           shipping: item?.shipping
             ? {
                 free_shipping: item.shipping.free_shipping,
                 logistic_type: item.shipping.logistic_type,
               }
-            : undefined,
-          seller: item?.seller_id ? { id: item.seller_id } : undefined,
-          attributes: (product.attributes || []).slice(0, 8).map((a: any) => ({
-            id: a.id,
-            name: a.name,
-            value_name: a.value_name,
-          })),
+            : null,
+          seller: item?.seller_id ? { id: item.seller_id } : null,
+          attributes: attrs,
         };
       }),
     );
 
-    // Apply client-side filters that /products/search doesn't support natively.
-    let filtered = results;
-    if (priceMin) filtered = filtered.filter((r) => r.price && r.price >= priceMin);
-    if (priceMax) filtered = filtered.filter((r) => r.price && r.price <= priceMax);
-    if (condition) filtered = filtered.filter((r) => r.condition === condition);
-    if (shipping === 'free') {
-      filtered = filtered.filter((r) => r.shipping?.free_shipping);
+    const withPrice = enriched.filter((r) => r.price != null);
+    const withoutPrice = enriched.filter((r) => r.price == null);
+    let results = [...withPrice, ...withoutPrice];
+
+    if (opts.priceMin)
+      results = results.filter((r) => !r.price || r.price >= opts.priceMin);
+    if (opts.priceMax)
+      results = results.filter((r) => !r.price || r.price <= opts.priceMax);
+    if (opts.condition)
+      results = results.filter(
+        (r) => !r.condition || r.condition === opts.condition,
+      );
+    if (opts.shipping === 'free') {
+      results = results.filter((r) => r.shipping?.free_shipping);
     }
-    if (sort === 'price_asc') {
-      filtered.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
-    } else if (sort === 'price_desc') {
-      filtered.sort((a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity));
+    if (opts.sort === 'price_asc') {
+      results.sort((a, b) => (a.price ?? Infinity) - (b.price ?? Infinity));
+    } else if (opts.sort === 'price_desc') {
+      results.sort(
+        (a, b) => (b.price ?? -Infinity) - (a.price ?? -Infinity),
+      );
     }
 
-    // sellerId / officialStoreId / searchType filters are no longer supported
-    // by /products/search; ignored for now. Catalog-search-based seller scoping
-    // would need a different flow (e.g. /users/{id}/items/search).
-    void sellerId;
-    void officialStoreId;
-    void searchType;
+    results = results.slice(0, opts.limit);
 
     return {
       site_id: siteId,
-      query: q,
+      query: opts.q,
       paging: catalog.paging,
-      results: filtered,
+      results,
     };
   }
 

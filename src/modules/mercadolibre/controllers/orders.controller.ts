@@ -51,8 +51,10 @@ export class OrdersController {
     @Query('offset') offset?: number,
     @Query('sort') sort?: string,
   ) {
-    const params: any = {};
-    
+    // ML requires seller={user_id} — resolve from the forwarded user token.
+    const me = await this.mlService.get<any>('/users/me');
+    const params: any = { seller: me.id };
+
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
     if (sort) params.sort = sort;
