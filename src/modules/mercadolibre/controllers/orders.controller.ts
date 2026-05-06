@@ -32,6 +32,22 @@ export class OrdersController {
     required: false,
     example: 'date_desc',
   })
+  @ApiQuery({
+    name: 'date_from',
+    description: 'Filter orders created from this date (ISO 8601, e.g. 2026-05-01T00:00:00.000-03:00)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'date_to',
+    description: 'Filter orders created up to this date (ISO 8601)',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'status',
+    description: 'Filter by order status (paid, confirmed, cancelled, invalid)',
+    required: false,
+    example: 'paid',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of received orders',
@@ -51,6 +67,9 @@ export class OrdersController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
     @Query('sort') sort?: string,
+    @Query('date_from') dateFrom?: string,
+    @Query('date_to') dateTo?: string,
+    @Query('status') status?: string,
     @MlToken() userToken?: string,
   ) {
     // ML requires seller={user_id} — resolve from the forwarded user token.
@@ -60,6 +79,9 @@ export class OrdersController {
     if (limit) params.limit = limit;
     if (offset !== undefined) params.offset = offset;
     if (sort) params.sort = sort;
+    if (dateFrom) params['order.date_created.from'] = dateFrom;
+    if (dateTo) params['order.date_created.to'] = dateTo;
+    if (status) params['order.status'] = status;
 
     return this.mlService.get('/orders/search', params, userToken);
   }
