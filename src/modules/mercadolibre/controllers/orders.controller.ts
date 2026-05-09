@@ -43,6 +43,17 @@ export class OrdersController {
     required: false,
   })
   @ApiQuery({
+    name: 'date_closed_from',
+    description:
+      'Filter orders by close (paid) date from. ML dashboard buckets revenue by close date — use this for revenue queries.',
+    required: false,
+  })
+  @ApiQuery({
+    name: 'date_closed_to',
+    description: 'Filter orders by close (paid) date to.',
+    required: false,
+  })
+  @ApiQuery({
     name: 'status',
     description: 'Filter by order status (paid, confirmed, cancelled, invalid)',
     required: false,
@@ -69,6 +80,8 @@ export class OrdersController {
     @Query('sort') sort?: string,
     @Query('date_from') dateFrom?: string,
     @Query('date_to') dateTo?: string,
+    @Query('date_closed_from') dateClosedFrom?: string,
+    @Query('date_closed_to') dateClosedTo?: string,
     @Query('status') status?: string,
     @MlToken() userToken?: string,
   ) {
@@ -81,6 +94,8 @@ export class OrdersController {
     if (sort) params.sort = sort;
     if (dateFrom) params['order.date_created.from'] = dateFrom;
     if (dateTo) params['order.date_created.to'] = dateTo;
+    if (dateClosedFrom) params['order.date_closed.from'] = dateClosedFrom;
+    if (dateClosedTo) params['order.date_closed.to'] = dateClosedTo;
     if (status) params['order.status'] = status;
 
     return this.mlService.get('/orders/search', params, userToken);
